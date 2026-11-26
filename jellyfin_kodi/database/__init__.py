@@ -204,6 +204,7 @@ def jellyfin_tables(cursor):
 def reset():
     """Reset both the jellyfin database and the kodi database."""
     from ..views import Views
+    from ..playlists import Playlists
 
     views = Views()
 
@@ -230,6 +231,7 @@ def reset():
     reset_jellyfin()
     views.delete_playlists()
     views.delete_nodes()
+    Playlists().delete_playlists()
 
     if dialog("yesno", "{jellyfin}", translate(33086)):
         reset_artwork()

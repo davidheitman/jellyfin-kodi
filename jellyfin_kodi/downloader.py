@@ -168,6 +168,59 @@ def get_items(parent_id, item_type=None, basic=False, params=None):
         yield items
 
 
+def get_playlists():
+    """Every playlist visible to the user, regardless of which library holds it."""
+    query = {
+        "url": "Users/{UserId}/Items",
+        "params": {
+            "IncludeItemTypes": "Playlist",
+            "SortBy": "SortName",
+            "SortOrder": "Ascending",
+            "Fields": api.basic_info(),
+            "EnableTotalRecordCount": False,
+            "Recursive": True,
+        },
+    }
+
+    for items in _get_items(query):
+        yield items
+
+
+@stop
+def get_playlist_items(playlist_id, fields=None):
+    """Yield the items of a playlist, in playlist order.
+
+    _get_items() pages in parallel and yields batches as they complete, which
+    loses the ordering a playlist is defined by, so page through sequentially.
+    """
+    try:
+        limit = min(int(settings("limitIndex") or 50), 50)
+    except ValueError:
+        # A hand-edited settings.xml can hold anything. Paging slowly beats a
+        # traceback that the caller turns into "playlists silently never sync".
+        limit = 50
+    url = "Playlists/%s/Items" % playlist_id
+    params = {
+        "UserId": "{UserId}",
+        "Fields": fields or api.basic_info(),
+        "StartIndex": 0,
+        "Limit": limit,
+        "EnableTotalRecordCount": True,
+    }
+
+    while True:
+        result = _get(url, dict(params)) or {}
+        items = result.get("Items") or []
+
+        for item in items:
+            yield item
+
+        params["StartIndex"] += len(items)
+
+        if not items or params["StartIndex"] >= result.get("TotalRecordCount", 0):
+            break
+
+
 def get_artists(parent_id=None):
 
     query = {

@@ -10,6 +10,7 @@ import xbmc
 from . import downloader as server
 from .objects import Movies, TVShows, MusicVideos, Music
 from .database import Database, get_sync, save_sync, jellyfin_db
+from .playlists import Playlists
 from .helper import translate, settings, window, progress, dialog, LazyLogger, xmls
 from .helper.utils import get_screensaver, set_screensaver
 from .helper.exceptions import (
@@ -216,6 +217,10 @@ class FullSync(object):
 
             self.sync["Libraries"].pop(self.sync["Libraries"].index(library))
             self.sync["RestorePoint"] = {}
+
+        Playlists().sync_playlists()
+        # Tell the library thread not to repeat this the moment startup() returns.
+        self.library.playlists_synced = True
 
         elapsed = datetime.datetime.now() - start_time
         settings("SyncInstallRunDone.bool", True)

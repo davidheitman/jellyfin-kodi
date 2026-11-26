@@ -15,6 +15,7 @@ from .objects.kodi import Movies as KodiDb
 from .database import Database, jellyfin_db, get_sync, save_sync
 from .full_sync import FullSync
 from .views import Views
+from .playlists import Playlists
 from .downloader import GetItemWorker
 from .helper import translate, api, stop, settings, window, dialog, event, LazyLogger
 from .helper.utils import split_list, set_screensaver, get_screensaver
@@ -41,6 +42,8 @@ class Library(threading.Thread):
     stop_thread = False
     suspend = False
     pending_refresh = False
+    pending_playlists = False
+    playlists_synced = False
     screensaver = None
     progress_updates = None
     total_updates = 0
@@ -89,6 +92,10 @@ class Library(threading.Thread):
 
         if not self.startup():
             self.stop_client()
+        elif not self.playlists_synced:
+            # startup() runs a full sync on first install and when libraries are
+            # pending, and that already ends with a playlist sync.
+            Playlists().sync_playlists()
 
         window("jellyfin_startup.bool", True)
 
@@ -229,6 +236,12 @@ class Library(threading.Thread):
             self.save_last_sync()
             self.total_updates = 0
             window("jellyfin_sync", clear=True)
+
+            if self.pending_playlists:
+                # A burst of item changes has settled. Playlist membership is not
+                # something the sync queue reports item by item, so refresh the lot.
+                self.pending_playlists = False
+                Playlists().sync_playlists()
 
             if self.progress_updates:
 
@@ -677,6 +690,7 @@ class Library(threading.Thread):
             self.updated_queue.put(item)
 
         self.total_updates += len(data)
+        self.pending_playlists = True
         LOG.info("---[ updated:%s ]", len(data))
 
     def removed(self, data):
@@ -692,6 +706,7 @@ class Library(threading.Thread):
             self.removed_queue.put(item)
 
         self.total_updates += len(data)
+        self.pending_playlists = True
         LOG.info("---[ removed:%s ]", len(data))
 
 

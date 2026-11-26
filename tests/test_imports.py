@@ -99,6 +99,10 @@ def test_import_objects():
     import jellyfin_kodi.objects.utils  # noqa: F401
 
 
+def test_import_playlists():
+    import jellyfin_kodi.playlists  # noqa: F401
+
+
 def test_import_player():
     import jellyfin_kodi.player  # noqa: F401
 
