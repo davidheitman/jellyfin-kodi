@@ -259,14 +259,28 @@ class Monitor(xbmc.Monitor):
             window("JellyfinAdditionalUserImage.%s" % index, image)
             window("JellyfinAdditionalUserPosition.%s" % user["UserId"], str(index))
 
+    def set_play_state(self, play):
+        """Play, pause or toggle every active player.
+
+        play is what Player.PlayPause takes: True plays, False pauses, "toggle"
+        toggles. xbmc.Player().pause() only toggles, so an Unpause arriving while
+        Kodi is already playing pauses it instead.
+        """
+        result = JSONRPC("Player.GetActivePlayers").execute()
+
+        for active_player in result.get("result") or []:
+            JSONRPC("Player.PlayPause").execute(
+                {"playerid": active_player["playerid"], "play": play}
+            )
+
     def playstate(self, data):
         """Jellyfin playstate updates."""
         command = data["Command"]
         actions = {
             "Stop": self.player.stop,
-            "Unpause": self.player.pause,
-            "Pause": self.player.pause,
-            "PlayPause": self.player.pause,
+            "Unpause": lambda: self.set_play_state(True),
+            "Pause": lambda: self.set_play_state(False),
+            "PlayPause": lambda: self.set_play_state("toggle"),
             "NextTrack": self.player.playnext,
             "PreviousTrack": self.player.playprevious,
         }
