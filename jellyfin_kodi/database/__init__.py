@@ -349,6 +349,30 @@ def get_sync():
     return sync
 
 
+def _write_json(path, payload):
+    """Write JSON so an interrupted write cannot destroy what was there.
+
+    Opening the target directly truncates it before anything is written, so
+    losing power midway through left an empty or half written file. For
+    data.json that is every configured server and its token, on hardware that
+    is often just switched off at the wall.
+
+    Write a temporary file alongside, flush it to disk, then rename over the
+    target. Rename is atomic within a directory, so a reader sees either the
+    previous file or the new one.
+    """
+    data = json.dumps(payload, sort_keys=True, indent=4, ensure_ascii=False)
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+
+    temp = path + ".tmp"
+    with open(temp, "wb") as outfile:
+        outfile.write(data)
+        outfile.flush()
+        os.fsync(outfile.fileno())
+    os.replace(temp, path)
+
+
 def save_sync(sync):
 
     if not xbmcvfs.exists(ADDON_DATA):
@@ -356,11 +380,7 @@ def save_sync(sync):
 
     sync["Date"] = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    with open(os.path.join(ADDON_DATA, "sync.json"), "wb") as outfile:
-        data = json.dumps(sync, sort_keys=True, indent=4, ensure_ascii=False)
-        if isinstance(data, str):
-            data = data.encode("utf-8")
-        outfile.write(data)
+    _write_json(os.path.join(ADDON_DATA, "sync.json"), sync)
 
 
 def get_credentials():
@@ -405,11 +425,7 @@ def save_credentials(credentials):
     if not xbmcvfs.exists(ADDON_DATA):
         xbmcvfs.mkdirs(ADDON_DATA)
     try:
-        with open(os.path.join(ADDON_DATA, "data.json"), "wb") as outfile:
-            data = json.dumps(credentials, sort_keys=True, indent=4, ensure_ascii=False)
-            if isinstance(data, str):
-                data = data.encode("utf-8")
-            outfile.write(data)
+        _write_json(os.path.join(ADDON_DATA, "data.json"), credentials)
     except Exception:
         LOG.exception("Failed to save credentials:")
 
