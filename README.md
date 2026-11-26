@@ -77,6 +77,41 @@ Detailed installation instructions can be found in the [Jellyfin Client Document
 
 <!-- Get started with the [wiki guide](https://github.com/MediaBrowser/plugin.video.emby/wiki) -->
 
+### Signing in again without the Kodi interface
+
+Changing your Jellyfin password invalidates the stored access token, and the
+add-on normally asks for a new one through a dialog on screen. That is awkward
+on a wall mounted or headless box, so `tools/reauth.py` does the same job from
+a terminal. It needs only python3 and the standard library, and imports nothing
+from the add-on.
+
+Stop Kodi first, because the add-on rewrites the whole file and would discard
+anything written underneath it.
+
+```sh
+systemctl stop kodi
+
+# which servers are configured, and where the file is
+python3 tools/reauth.py --list
+
+# sign in with a password
+python3 tools/reauth.py
+
+# or approve from a phone, with no password typed on the box
+python3 tools/reauth.py --quick-connect
+
+systemctl start kodi
+```
+
+Quick Connect needs enabling in the Jellyfin dashboard under General. The
+script prints a code, you approve it from any signed in browser or app, and it
+writes the token itself.
+
+The password is prompted for rather than passed as an argument, so it stays out
+of shell history. `--insecure` skips TLS verification for a self signed
+certificate, and `--data-dir` points at `data.json` on a layout the script does
+not already know about.
+
 ### Known limitations
 
 - Chapter images are missing unless native playback mode is used.
