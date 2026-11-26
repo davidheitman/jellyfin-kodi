@@ -363,6 +363,23 @@ def save_sync(sync):
         outfile.write(data)
 
 
+def _restrict(path):
+    """Make a file owner-only, where the platform has such a notion.
+
+    data.json holds an AccessToken, which is a working credential for the
+    Jellyfin server for as long as it is not revoked. It was created with
+    whatever the umask gave, normally world readable.
+
+    Best effort on purpose. Windows and FAT have no POSIX modes, and failing
+    to save a token because a permission bit could not be set would be worse
+    than the exposure it is guarding against.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except (OSError, NotImplementedError):
+        LOG.debug("Could not restrict permissions on %s", path)
+
+
 def get_credentials():
     if (3, 0) <= sys.version_info < (3, 6):
         LOG.error("Python versions 3.0-3.5 are NOT supported.")
@@ -405,11 +422,13 @@ def save_credentials(credentials):
     if not xbmcvfs.exists(ADDON_DATA):
         xbmcvfs.mkdirs(ADDON_DATA)
     try:
-        with open(os.path.join(ADDON_DATA, "data.json"), "wb") as outfile:
+        path = os.path.join(ADDON_DATA, "data.json")
+        with open(path, "wb") as outfile:
             data = json.dumps(credentials, sort_keys=True, indent=4, ensure_ascii=False)
             if isinstance(data, str):
                 data = data.encode("utf-8")
             outfile.write(data)
+        _restrict(path)
     except Exception:
         LOG.exception("Failed to save credentials:")
 
