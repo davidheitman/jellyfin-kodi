@@ -19,136 +19,32 @@ underneath a running Kodi is lost on its next save.
 """
 import argparse
 import getpass
-import json
 import os
-import socket
-import ssl
 import sys
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import datetime
 
-#: Searched in order. LibreELEC and CoreELEC put userdata under /storage.
-DATA_DIRS = (
-    "/storage/.kodi/userdata/addon_data/plugin.video.jellyfin",
-    "~/.kodi/userdata/addon_data/plugin.video.jellyfin",
-    "~/.var/app/tv.kodi.Kodi/data/userdata/addon_data/plugin.video.jellyfin",
-    "~/Library/Application Support/Kodi/userdata/addon_data/plugin.video.jellyfin",
-    "~/AppData/Roaming/Kodi/userdata/addon_data/plugin.video.jellyfin",
-)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _jfcli  # noqa: E402
 
-CLIENT = "Jellyfin for Kodi"
-VERSION = "1.0.0"
-
-
-def find_data_dir(explicit=None):
-    if explicit:
-        path = os.path.expanduser(explicit)
-        if not os.path.isfile(os.path.join(path, "data.json")):
-            raise SystemExit("no data.json in %s" % path)
-        return path
-
-    for candidate in DATA_DIRS:
-        path = os.path.expanduser(candidate)
-        if os.path.isfile(os.path.join(path, "data.json")):
-            return path
-
-    raise SystemExit(
-        "could not find data.json. Pass --data-dir with the directory holding it."
-    )
-
-
-def auth_header(device_id):
-    # Jellyfin rejects an unauthenticated request without this. The values only
-    # name the session in the server's device list.
-    return 'MediaBrowser Client="%s", Device="%s", DeviceId="%s", Version="%s"' % (
-        CLIENT,
-        socket.gethostname(),
-        device_id,
-        VERSION,
-    )
+find_data_dir = _jfcli.find_data_dir
+describe = _jfcli.describe_server
+pick_server = _jfcli.pick_server
 
 
 def request(server_url, path, device_id, payload=None, token=None, insecure=False):
-    url = server_url.rstrip("/") + "/" + path.lstrip("/")
-    body = json.dumps(payload).encode("utf-8") if payload is not None else None
-
-    header = auth_header(device_id)
-    if token:
-        header += ', Token="%s"' % token
-
-    req = urllib.request.Request(url, data=body, method="POST" if body else "GET")
-    req.add_header("Authorization", header)
-    req.add_header("Accept", "application/json")
-    if body:
-        req.add_header("Content-Type", "application/json")
-
-    context = None
-    if insecure:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-
-    try:
-        with urllib.request.urlopen(req, timeout=15, context=context) as response:
-            raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", "replace")[:200]
-        raise SystemExit("%s %s: %s %s" % (req.get_method(), url, exc.code, detail))
-    except urllib.error.URLError as exc:
-        raise SystemExit("could not reach %s: %s" % (url, exc.reason))
-
-
-def load(path):
-    with open(path, "rb") as handle:
-        return json.load(handle)
-
-
-def save(path, document):
-    """Same contract as the add-on's own writer: atomic, then owner only."""
-    data = json.dumps(document, sort_keys=True, indent=4, ensure_ascii=False)
-    temp = path + ".tmp"
-    with open(temp, "wb") as handle:
-        handle.write(data.encode("utf-8"))
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temp, path)
-    try:
-        os.chmod(path, 0o600)
-    except (OSError, NotImplementedError):
-        pass
-
-
-def describe(server):
-    return "%s  %s  (user %s)" % (
-        server.get("Name") or "?",
-        server.get("address") or "?",
-        server.get("UserId") or "none",
+    return _jfcli.jellyfin_request(
+        server_url, path, device_id, payload=payload, token=token, insecure=insecure
     )
 
 
-def pick_server(servers, server_id=None):
-    if not servers:
-        raise SystemExit("no servers configured; set one up in Kodi first")
+def load(path):
+    return _jfcli.load_json(path)
 
-    if server_id:
-        for server in servers:
-            if server.get("Id") == server_id:
-                return server
-        raise SystemExit("no server with Id %s" % server_id)
 
-    if len(servers) == 1:
-        return servers[0]
-
-    for index, server in enumerate(servers):
-        print("  [%d] %s" % (index, describe(server)))
-    try:
-        return servers[int(input("server: ").strip())]
-    except (ValueError, IndexError):
-        raise SystemExit("not a listed server")
+def save(path, document):
+    _jfcli.save_json(path, document)
 
 
 def password_login(server, device_id, args):

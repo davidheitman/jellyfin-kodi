@@ -112,6 +112,28 @@ of shell history. `--insecure` skips TLS verification for a self signed
 certificate, and `--data-dir` points at `data.json` on a layout the script does
 not already know about.
 
+### Running a library sync from a terminal
+
+`tools/sync.py` offers the Manage Libraries operations without the on screen
+menu, which is useful on a headless or wall mounted box. Repair is the one to
+reach for after the server address changes, because artwork URLs are stored
+absolute in Kodi's own database and a repair rewrites them.
+
+Kodi must be running, with "Allow remote control via HTTP" enabled under
+Settings, Services, Control. The script asks Kodi to do the work rather than
+doing it itself, so the sync takes the same code path as the menu.
+
+```sh
+python3 tools/sync.py --list
+python3 tools/sync.py --repair <library-id>
+python3 tools/sync.py --repair-all        # every library Kodi has synced
+python3 tools/sync.py --update-all
+```
+
+Add `--kodi-user` and `--kodi-password` if Kodi's web interface asks for
+credentials, and `--kodi-host` if running it from another machine. The work
+happens in the background; follow it in `kodi.log`.
+
 ### Known limitations
 
 - Chapter images are missing unless native playback mode is used.
